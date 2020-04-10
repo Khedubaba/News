@@ -1,7 +1,6 @@
 package com.adityakhedekar.khedubaba.news;
 
 import androidx.appcompat.app.AppCompatActivity;
-
 import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -28,9 +27,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     ArrayList<String> titles = new ArrayList<>();
     ArrayList<String> content = new ArrayList<>();
-
     ArrayAdapter arrayAdapter;
-
     SQLiteDatabase articlesDB;
 
     @Override
@@ -39,43 +36,43 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         articlesDB = this.openOrCreateDatabase("Articles", MODE_PRIVATE, null);
-
         articlesDB.execSQL("CREATE TABLE IF NOT EXISTS articles (id INTEGER PRIMARY KEY, articleId, INTEGER, title VARCHAR, content VARCHAR)");
-
-
 
         DownloadTask task = new DownloadTask();
         try {
-
             task.execute("https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty");
-
-        } catch (Exception e) {
-
+        }
+        catch (Exception e) {
+            e.printStackTrace();
         }
 
         ListView listView = findViewById(R.id.listView);
         arrayAdapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, titles);
         listView.setAdapter(arrayAdapter);
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                Intent intent = new Intent(getApplicationContext(), ArticleActivity.class);
+                intent.putExtra("content", content.get(i));
+                Log.i("aandu",content.get(i));
+                startActivity(intent);
+            }
+        });
         updateListView();
     }
 
     public void updateListView() {
         Cursor c = articlesDB.rawQuery("SELECT * FROM articles", null);
-
         int contentIndex = c.getColumnIndex("content");
         int titleIndex = c.getColumnIndex("title");
-
         if (c.moveToFirst()) {
             titles.clear();
             content.clear();
-
             do {
-
                 titles.add(c.getString(titleIndex));
                 content.add(c.getString(contentIndex));
 
             } while (c.moveToNext());
-
             arrayAdapter.notifyDataSetChanged();
         }
     }
@@ -90,17 +87,11 @@ public class MainActivity extends AppCompatActivity {
             HttpURLConnection urlConnection = null;
 
             try {
-
                 url = new URL(urls[0]);
-
                 urlConnection = (HttpURLConnection) url.openConnection();
-
                 InputStream inputStream = urlConnection.getInputStream();
-
                 InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
-
                 int data = inputStreamReader.read();
-
                 while (data != -1) {
                     char current = (char) data;
                     result += current;
@@ -108,9 +99,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 JSONArray jsonArray = new JSONArray(result);
-
                 int numberOfItems = 20;
-
                 if (jsonArray.length() < 20) {
                     numberOfItems = jsonArray.length();
                 }
@@ -121,14 +110,10 @@ public class MainActivity extends AppCompatActivity {
                     String articleId = jsonArray.getString(i);
                     url = new URL("https://hacker-news.firebaseio.com/v0/item/" + articleId + ".json?print=pretty");
                     urlConnection = (HttpURLConnection) url.openConnection();
-
                     inputStream = urlConnection.getInputStream();
                     inputStreamReader = new InputStreamReader(inputStream);
-
                     data = inputStreamReader.read();
-
                     String articleInfo = "";
-
                     while (data != -1) {
                         char current = (char) data;
                         articleInfo += current;
@@ -136,7 +121,6 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     JSONObject jsonObject = new JSONObject(articleInfo);
-
                     if (!jsonObject.isNull("title") && !jsonObject.isNull("url")) {
                         String articleTitle = jsonObject.getString("title");
                         String articleUrl = jsonObject.getString("url");
