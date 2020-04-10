@@ -2,9 +2,15 @@ package com.adityakhedekar.khedubaba.news;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteStatement;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 
@@ -21,94 +27,159 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     ArrayList<String> titles = new ArrayList<>();
+    ArrayList<String> content = new ArrayList<>();
+
     ArrayAdapter arrayAdapter;
+
+    SQLiteDatabase articlesDB;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        DownloadTask task = new DownloadTask();
-        String result = null;
+        articlesDB = this.openOrCreateDatabase("Articles", MODE_PRIVATE, null);
 
+        articlesDB.execSQL("CREATE TABLE IF NOT EXISTS articles (id INTEGER PRIMARY KEY, articleId, INTEGER, title VARCHAR, content VARCHAR)");
+
+
+
+        DownloadTask task = new DownloadTask();
         try {
-            result = task.execute("https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty").get();
+
+            task.execute("https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty");
+
         } catch (Exception e) {
-            e.printStackTrace();
+
         }
-//        Log.i(TAG, "Result: " +result);
 
         ListView listView = findViewById(R.id.listView);
         arrayAdapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, titles);
         listView.setAdapter(arrayAdapter);
+        updateListView();
     }
 
-    public static class DownloadTask extends AsyncTask<String, Void, String>{
+    public void updateListView() {
+        Cursor c = articlesDB.rawQuery("SELECT * FROM articles", null);
+
+        int contentIndex = c.getColumnIndex("content");
+        int titleIndex = c.getColumnIndex("title");
+
+        if (c.moveToFirst()) {
+            titles.clear();
+            content.clear();
+
+            do {
+
+                titles.add(c.getString(titleIndex));
+                content.add(c.getString(contentIndex));
+
+            } while (c.moveToNext());
+
+            arrayAdapter.notifyDataSetChanged();
+        }
+    }
+
+    public class DownloadTask extends AsyncTask<String, Void, String> {
 
         @Override
         protected String doInBackground(String... urls) {
+
             String result = "";
             URL url;
-            HttpURLConnection httpURLConnection = null;
+            HttpURLConnection urlConnection = null;
+
             try {
+
                 url = new URL(urls[0]);
-                httpURLConnection = (HttpURLConnection) url.openConnection();
-                InputStream inputStream = httpURLConnection.getInputStream();
+
+                urlConnection = (HttpURLConnection) url.openConnection();
+
+                InputStream inputStream = urlConnection.getInputStream();
+
                 InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
+
                 int data = inputStreamReader.read();
 
-                while (data != -1){
+                while (data != -1) {
                     char current = (char) data;
                     result += current;
                     data = inputStreamReader.read();
                 }
 
                 JSONArray jsonArray = new JSONArray(result);
+
                 int numberOfItems = 20;
-                if (jsonArray.length() < 20){
+
+                if (jsonArray.length() < 20) {
                     numberOfItems = jsonArray.length();
                 }
-                for (int i=0; i<numberOfItems; i++){
+
+                articlesDB.execSQL("DELETE FROM articles");
+
+                for (int i=0;i < numberOfItems; i++) {
                     String articleId = jsonArray.getString(i);
-                    url = new URL("https://hacker-news.firebaseio.com/v0/item/"+articleId+".json?print=pretty");
-                    httpURLConnection = (HttpURLConnection) url.openConnection();
-                    inputStream = httpURLConnection.getInputStream();
+                    url = new URL("https://hacker-news.firebaseio.com/v0/item/" + articleId + ".json?print=pretty");
+                    urlConnection = (HttpURLConnection) url.openConnection();
+
+                    inputStream = urlConnection.getInputStream();
                     inputStreamReader = new InputStreamReader(inputStream);
+
                     data = inputStreamReader.read();
+
                     String articleInfo = "";
-                    while (data != -1){
+
+                    while (data != -1) {
                         char current = (char) data;
                         articleInfo += current;
                         data = inputStreamReader.read();
                     }
 
                     JSONObject jsonObject = new JSONObject(articleInfo);
-                    if (!jsonObject.isNull("title") && !jsonObject.isNull("url")){
+
+                    if (!jsonObject.isNull("title") && !jsonObject.isNull("url")) {
                         String articleTitle = jsonObject.getString("title");
-                        String articleURL = jsonObject.getString("url");
-//                        Log.i(TAG, "Title : URL ==> " + articleTitle +" : "+ articleURL);
-                        url = new URL(articleURL);
-                        httpURLConnection =  (HttpURLConnection) url.openConnection();
-                        inputStream = httpURLConnection.getInputStream();
+                        String articleUrl = jsonObject.getString("url");
+
+                        url = new URL(articleUrl);
+                        urlConnection = (HttpURLConnection) url.openConnection();
+                        inputStream = urlConnection.getInputStream();
                         inputStreamReader = new InputStreamReader(inputStream);
                         data = inputStreamReader.read();
                         String articleContent = "";
-                        while (data != -1){
+                        while (data != -1) {
                             char current = (char) data;
                             articleContent += current;
                             data = inputStreamReader.read();
                         }
-                        Log.i(TAG, "HTML: " + articleContent);
+
+                        Log.i("HTML", articleContent);
+
+                        String sql = "INSERT INTO articles (articleId, title, content) VALUES (?, ?, ?)";
+                        SQLiteStatement statement = articlesDB.compileStatement(sql);
+                        statement.bindString(1,articleId);
+                        statement.bindString(2,articleTitle);
+                        statement.bindString(3,articleContent);
+
+                        statement.execute();
                     }
                 }
 
-//                Log.i(TAG, "URLContent: " + result);
+                Log.i("URL Content", result);
                 return result;
-            }
-            catch (Exception e) {
+
+            } catch (Exception e) {
                 e.printStackTrace();
             }
+
             return null;
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+
+            updateListView();
         }
     }
 }
